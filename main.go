@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -61,6 +62,34 @@ func generateID(tasks []Task) int {
 	return maxID + 1
 }
 
+func getTaskByID(id int) Task {
+	file, err := os.Open(fileName)
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return Task{}
+	}
+	defer file.Close()
+
+	var tasks []Task
+	err = json.NewDecoder((file)).Decode(&tasks)
+	if err != nil {
+		fmt.Println("Error decoding file:", err)
+		return Task{}
+	}
+
+	for _, task := range tasks {
+		if task.ID == id {
+			return task
+		}
+	}
+
+	return Task{}
+}
+
+func updateTask(id int) Task {
+	return getTaskByID(id)
+}
+
 func addTask(description string) error {
 	tasks, err := loadTask()
 
@@ -107,7 +136,6 @@ func main() {
 		// Парсим команду и аргументы
 		if strings.HasPrefix(input, "add") {
 			desc := strings.TrimPrefix(input, "add")
-			desc = strings.Trim(desc, "\"")
 
 			if desc == "" {
 				fmt.Println("Description cannot be empty.")
@@ -119,6 +147,28 @@ func main() {
 			}
 			continue
 		}
+
+		if strings.HasPrefix(input, "update") {
+			fields := strings.Fields(input)
+
+			if len(fields) < 2 {
+				fmt.Println("Please provide a task description.")
+				continue
+			}
+
+			idStr := fields[1]
+
+			id, err := strconv.Atoi(idStr)
+			if err != nil {
+				fmt.Println("Invalid task ID.", idStr)
+				continue
+			}
+
+			task := updateTask(id)
+			fmt.Println(task.Description)
+			continue
+		}
+
 		fmt.Println("Unknow command:", input)
 	}
 }
