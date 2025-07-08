@@ -32,7 +32,7 @@ func loadTask() ([]Task, error) {
 	}
 	defer file.Close()
 
-	err = json.NewDecoder((file)).Decode(&tasks)
+	err = json.NewDecoder(file).Decode(&tasks)
 	if err != nil {
 		return nil, err
 	}
@@ -62,43 +62,26 @@ func generateID(tasks []Task) int {
 	return maxID + 1
 }
 
-func getTaskByID(id int) Task {
-	file, err := os.Open(fileName)
+func getTaskByID(id int) ([]Task, *Task, error) {
+	tasks, err := loadTask()
 	if err != nil {
-		fmt.Println("Error opening file:", err)
-		return Task{}
+		return nil, nil, err
 	}
-	defer file.Close()
-
-	var tasks []Task
-	err = json.NewDecoder((file)).Decode(&tasks)
-	if err != nil {
-		fmt.Println("Error decoding file:", err)
-		return Task{}
-	}
-
-	for _, task := range tasks {
-		if task.ID == id {
-			return task
+	for i := range tasks {
+		if tasks[i].ID == id {
+			return tasks, &tasks[i], nil
 		}
 	}
-
-	return Task{}
-}
-
-func updateTask(id int) Task {
-	return getTaskByID(id)
+	return tasks, nil, fmt.Errorf("task with ID %d not found", id)
 }
 
 func addTask(description string) error {
 	tasks, err := loadTask()
-
 	if err != nil {
 		return err
 	}
 
 	now := time.Now()
-
 	newTask := Task{
 		ID:          generateID(tasks),
 		Description: description,
@@ -114,6 +97,75 @@ func addTask(description string) error {
 	}
 
 	fmt.Println("Added new task:", newTask.Description)
+	return nil
+}
+
+func updateTask(id int, newDesc string) error {
+	tasks, task, err := getTaskByID(id)
+	if err != nil {
+		return err
+	}
+	task.Description = newDesc
+	task.UpdatedAt = time.Now()
+	return saveTask(tasks)
+}
+
+func updateTaskStatusInProgress(id int) error {
+	tasks, task, err := getTaskByID(id)
+	if err != nil {
+		return err
+	}
+	task.Status = "In Progress"
+	task.UpdatedAt = time.Now()
+	return saveTask(tasks)
+}
+
+func updateTaskStatusDone(id int) error {
+	tasks, task, err := getTaskByID(id)
+	if err != nil {
+		return err
+	}
+	task.Status = "Done"
+	task.UpdatedAt = time.Now()
+	return saveTask(tasks)
+}
+
+func updateTaskStatusInToDO(id int) error {
+	tasks, task, err := getTaskByID(id)
+	if err != nil {
+		return err
+	}
+	task.Status = "To-Do"
+	task.UpdatedAt = time.Now()
+	return saveTask(tasks)
+}
+
+func deleteTask(id int) error {
+	tasks, err := loadTask()
+	if err != nil {
+		return err
+	}
+
+	found := false
+	newTasks := make([]Task, 0, len(tasks))
+	for _, task := range tasks {
+		if task.ID == id {
+			found = true
+			continue // пропускаем задачу, которую нужно удалить
+		}
+		newTasks = append(newTasks, task)
+	}
+
+	if !found {
+		return fmt.Errorf("task with ID %d not found", id)
+	}
+
+	err = saveTask(newTasks)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Deleted task with ID:", id)
 	return nil
 }
 
@@ -133,9 +185,9 @@ func main() {
 			continue
 		}
 
-		// Парсим команду и аргументы
+		// Парсим команду и аргументы для add
 		if strings.HasPrefix(input, "add") {
-			desc := strings.TrimPrefix(input, "add")
+			desc := strings.TrimSpace(strings.TrimPrefix(input, "add"))
 
 			if desc == "" {
 				fmt.Println("Description cannot be empty.")
@@ -148,27 +200,122 @@ func main() {
 			continue
 		}
 
+		// Парсим команду и аргументы для update
 		if strings.HasPrefix(input, "update") {
-			fields := strings.Fields(input)
+			parts := strings.SplitN(input, " ", 3)
 
-			if len(fields) < 2 {
-				fmt.Println("Please provide a task description.")
+			if len(parts) < 3 {
+				fmt.Println("Usage: update <id> <new description>")
 				continue
 			}
 
-			idStr := fields[1]
-
-			id, err := strconv.Atoi(idStr)
+			id, err := strconv.Atoi(parts[1])
 			if err != nil {
-				fmt.Println("Invalid task ID.", idStr)
+				fmt.Println("Invalid task ID.", parts[1])
 				continue
 			}
 
-			task := updateTask(id)
-			fmt.Println(task.Description)
+			newDesc := parts[2]
+			err = updateTask(id, newDesc)
+			if err != nil {
+				fmt.Println("Error updating task:", err)
+			} else {
+				fmt.Println("Updated task:", newDesc)
+			}
 			continue
 		}
 
-		fmt.Println("Unknow command:", input)
+		// Парсим команду и аргументы для delete
+		if strings.HasPrefix(input, "delete") {
+			fields := strings.Fields(input)
+			if len(fields) < 2 {
+				fmt.Println("Usage: delete <id>")
+				continue
+			}
+			id, err := strconv.Atoi(fields[1])
+			if err != nil {
+				fmt.Println("Invalid task ID.", fields[1])
+				continue
+			}
+			err = deleteTask(id)
+			if err != nil {
+				fmt.Println("Error deleting task:", err)
+			}
+			continue
+		}
+
+		// Парсим команду и аргументы для mark-to-do
+		if strings.HasPrefix(input, "mark-to-do") {
+			parts := strings.Fields(input)
+
+			if len(parts) < 2 {
+				fmt.Println("Usage: update <id> <new description>")
+				continue
+			}
+
+			id, err := strconv.Atoi(parts[1])
+			if err != nil {
+				fmt.Println("Invalid task ID.", parts[1])
+				continue
+			}
+
+			err = updateTaskStatusInToDO(id)
+			if err != nil {
+				fmt.Println("Error updating task-status:", err)
+			} else {
+				fmt.Println("Updated task-status to mark-to-do seccessfully:")
+			}
+			continue
+		}
+
+		// Парсим команду и аргументы для mark-in-progress
+		if strings.HasPrefix(input, "mark-in-progress") {
+			parts := strings.Fields(input)
+
+			if len(parts) < 2 {
+				fmt.Println("Usage: update <id> <new description>")
+				continue
+			}
+
+			id, err := strconv.Atoi(parts[1])
+			if err != nil {
+				fmt.Println("Invalid task ID.", parts[1])
+				continue
+			}
+
+			err = updateTaskStatusInProgress(id)
+			if err != nil {
+				fmt.Println("Error updating task-status:", err)
+			} else {
+				fmt.Println("Updated task-status to mark-in-progress seccessfully:")
+			}
+			continue
+		}
+
+		// Парсим команду и аргументы для mark-done
+		if strings.HasPrefix(input, "mark-done") {
+			parts := strings.Fields(input)
+
+			if len(parts) < 2 {
+				fmt.Println("Usage: update <id> <new description>")
+				continue
+			}
+
+			id, err := strconv.Atoi(parts[1])
+			if err != nil {
+				fmt.Println("Invalid task ID.", parts[1])
+				continue
+			}
+
+			err = updateTaskStatusDone(id)
+			if err != nil {
+				fmt.Println("Error updating task-status:", err)
+			} else {
+				fmt.Println("Updated task-status to DONE seccessfully:")
+			}
+			continue
+		}
+
+		fmt.Println("Unknown command:", input)
 	}
 }
