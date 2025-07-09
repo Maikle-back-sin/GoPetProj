@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"github.com/k0kubun/pp/v3"
 	"os"
 	"strconv"
 	"strings"
@@ -85,7 +86,7 @@ func addTask(description string) error {
 	newTask := Task{
 		ID:          generateID(tasks),
 		Description: description,
-		Status:      "to-do",
+		Status:      "To-Do",
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -115,7 +116,7 @@ func updateTaskStatusInProgress(id int) error {
 	if err != nil {
 		return err
 	}
-	task.Status = "In Progress"
+	task.Status = "In-Progress"
 	task.UpdatedAt = time.Now()
 	return saveTask(tasks)
 }
@@ -167,6 +168,22 @@ func deleteTask(id int) error {
 
 	fmt.Println("Deleted task with ID:", id)
 	return nil
+}
+
+func getAllTasksWithStatus(status string) ([]Task, error) {
+	resTasks := []Task{}
+	tasks, err := loadTask()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, task := range tasks {
+		if task.Status == status {
+			resTasks = append(resTasks, task)
+		}
+	}
+
+	return resTasks, err
 }
 
 func main() {
@@ -312,6 +329,27 @@ func main() {
 				fmt.Println("Error updating task-status:", err)
 			} else {
 				fmt.Println("Updated task-status to DONE seccessfully:")
+			}
+			continue
+		}
+
+		// Парсим команду и аргументы для list
+		if strings.HasPrefix(input, "list") {
+			parts := strings.Fields(input)
+			if len(parts) < 2 {
+				tasks, err := loadTask()
+				if err != nil {
+					fmt.Println("Error showing tasks:", err)
+				} else {
+					pp.Println(tasks)
+				}
+			} else {
+				tasks, err := getAllTasksWithStatus(parts[1])
+				if err != nil {
+					fmt.Println("Error showing tasks:", err)
+				} else {
+					pp.Println(tasks)
+				}
 			}
 			continue
 		}
